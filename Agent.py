@@ -24,6 +24,7 @@ class Agent(object):
         self.main_network.summary()
         self.gamma = self.config.gamma
         self.optimizer = tf.keras.optimizers.Adam(learning_rate=1e-4, epsilon=1e-6)
+        self.loss = tf.keras.losses.Huber()
         self.init_explr = 1.0
         self.final_explr = 0.1
         self.final_explr_frame = 1000000
@@ -69,7 +70,7 @@ class Agent(object):
             max_o1_q = tf.reduce_max(o1_q, axis=1)
             expected_q = r_batch + self.gamma * max_o1_q * (1.0-d_batch)
             main_q = tf.reduce_sum(self.main_network(o_batch) * tf.one_hot(a_batch, self.env.action_space.n, 1.0, 0.0), axis=1)
-            loss = tf.keras.losses.mse(tf.stop_gradient(expected_q), main_q)
+            loss = self.loss(tf.stop_gradient(expected_q), main_q)
 
         gradients = tape.gradient(loss, self.main_network.trainable_weights)
         clipped_gradients = [tf.clip_by_norm(grad, 10) for grad in gradients]
