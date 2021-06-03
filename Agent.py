@@ -25,11 +25,14 @@ class Agent(object):
         self.gamma = self.config.gamma
         self.optimizer = tf.keras.optimizers.Adam(learning_rate=1e-4, epsilon=1e-6)
         self.loss = tf.keras.losses.Huber()
+        self.loss_metric = tf.keras.metrics.Mean(name="loss")
+        self.q_metric = tf.keras.metrics.Mean(name="Q_value")
         self.init_explr = 1.0
         self.final_explr = 0.1
         self.final_explr_frame = 1000000
         self.replay_start_size = 10000
         self.log_path = "./log/" + datetime.datetime.now().strftime("%Y%m%d_%H%M%S") + "_BreakoutNoFrameskip-v4"
+        self.summary_writer = tf.summary.create_file_writer(self.log_path + "/summary/")
 
         # Buffer (Memory)
         self.buffer = ReplayBuffer(buffer_size=self.config.buffer_size, odim=self.odim, adim=self.adim, batch_size=self.config.mini_batch_size)
@@ -76,8 +79,8 @@ class Agent(object):
         gradients = tape.gradient(loss, self.main_network.trainable_weights)
         clipped_gradients = [tf.clip_by_norm(grad, 10) for grad in gradients]
         self.optimizer.apply_gradients(zip(clipped_gradients, self.main_network.trainable_variables))
-        # self.loss_metric.update_state(loss)
-        # self.q_metric.update_state(main_q)
+        self.loss_metric.update_state(loss)
+        self.q_metric.update_state(main_q)
 
         return loss
 
@@ -112,7 +115,7 @@ class Agent(object):
                 self.buffer.append(o, a, r, o1, d)
                 o = o1
 
-                if(len(self.buffer.buffer) > 5000):
+                if len(self.buffer.buffer) > 5000:
                     o_batch, a_batch, r_batch, o1_batch, d_batch = self.buffer.sample()
                     self.update_main_network(tf.constant(value=o_batch, dtype='float32'), tf.constant(value=a_batch, dtype='int32'), tf.constant(value=r_batch, dtype='float32'), tf.constant(value=o1_batch, dtype='float32'), tf.constant(value=d_batch, dtype='float32'))
 
@@ -142,6 +145,18 @@ class Agent(object):
                 self.main_network.save_weights(self.log_path + "/weights/episode_{}".format(epoch))
                 # self.play(self.log_path + "/weights/", episode=ep_len)
 
+    def write_summary(self, episode, latest_100_score, episode_score, total_step, eps):
+
+        with self.summary_writer.as_default():
+            tf.summary.scalar("Reward (clipped)", episode_score, step=episode)
+            tf.summary.scalar("Latest 100 avg reward (clipped)", np.mean(latest_100_score), step=episode)
+            tf.summary.scalar("Loss", self.loss_metric.result(), step=episode)
+            tf.summary.scalar("Average Q", self.q_metric.result(), step=episode)
+            tf.summary.scalar("Total Frames", total_step, step=episode)
+            tf.summary.scalar("Epsilon", eps, step=episode)
+
+        self.loss_metric.reset_states()
+        self.q_metric.reset_states()
     # @tf.function
     # def learn(self):
     #     q_target = rewards + (1- dones) * self.gamma * tf.reduce_max(self.target(next_o))
