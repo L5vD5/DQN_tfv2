@@ -163,6 +163,56 @@ class Agent(object):
     # @tf.function
     # def learn(self):
     #     q_target = rewards + (1- dones) * self.gamma * tf.reduce_max(self.target(next_o))
+    def play(self, load_dir=None, episode=None, trial=5, max_playing_time=10):
+
+        if load_dir:
+            loaded_ckpt = tf.train.latest_checkpoint(load_dir)
+            self.main_network.load_weights(loaded_ckpt)
+
+        frame_set = []
+        reward_set = []
+        test_env = self.eval_env
+        for _ in range(trial):
+
+            o = test_env.reset()
+            frames = []
+            test_step = 0
+            test_reward = 0
+            done = False
+
+            while not done:
+
+                frames.append(test_env.render())
+
+                Q = self.getQ(tf.cast(tf.constant(value=tf.expand_dims(o, axis=0)), dtype=tf.float32))
+                a = tf.cast(tf.argmax(tf.squeeze(Q)), tf.int32).numpy()
+
+                o, reward, done, info = test_env.step(a)
+                test_reward += reward
+
+
+                test_step += 1
+
+                if done and (info["ale.lives"] != 0):
+                    test_env.reset()
+                    test_step = 0
+                    done = False
+
+                if len(frames) > 15 * 60 * max_playing_time:  # To prevent falling infinite repeating sequences.
+                    print("Playing takes {} minutes. Force termination.".format(max_playing_time))
+                    break
+
+            reward_set.append(test_reward)
+            frame_set.append(frames)
+
+        best_score = np.max(reward_set)
+        print("Best score of current network ({} trials): {}".format(trial, best_score))
+        best_score_ind = np.argmax(reward_set)
+        imageio.mimsave("test.gif", frame_set[best_score_ind], fps=15)
+
+        if episode is not None:
+            with self.summary_writer.as_default():
+                tf.summary.scalar("Test score", best_score, step=episode)
 
 def get_envs():
     env_name = 'BreakoutNoFrameskip-v4'
@@ -177,4 +227,4 @@ def get_envs():
     return env,eval_env
 
 a = Agent()
-a.train()
+a.play('./log/20210603_101243_BreakoutNoFrameskip-v4/weights/')
