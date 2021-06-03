@@ -1,4 +1,4 @@
-import datetime,gym,os,pybullet_envs,time,psutil,ray
+import datetime,gym,os,pybullet_envs,time,psutil,ray,imageio
 from atari_wrappers import make_atari, wrap_deepmind
 from ReplayBuffer import ReplayBuffer
 from DQN import DQNNetwork
@@ -29,6 +29,7 @@ class Agent(object):
         self.final_explr = 0.1
         self.final_explr_frame = 1000000
         self.replay_start_size = 10000
+        self.log_path = "./log/" + datetime.datetime.now().strftime("%Y%m%d_%H%M%S") + "_BreakoutNoFrameskip-v4"
 
         # Buffer (Memory)
         self.buffer = ReplayBuffer(buffer_size=self.config.buffer_size, odim=self.odim, adim=self.adim, batch_size=self.config.mini_batch_size)
@@ -94,7 +95,7 @@ class Agent(object):
             o, d, ep_ret, ep_len = self.env.reset(), False, 0, 0
             o = np.array(o)
 
-            while not (d or (ep_len == self.config.steps_per_epoch)):
+            while not (d):
 
                 if tf.random.uniform((), minval=0, maxval=1) < self.get_eps(tf.constant(n_env_step, tf.float32)):
                     a = self.env.action_space.sample()
@@ -137,6 +138,9 @@ class Agent(object):
                     ep_ret += r  # compute return
                     ep_len += 1
                 print("[Evaluate] ep_ret:[%.4f] ep_len:[%d]" % (ep_ret, ep_len))
+                print("Saving weights...")
+                self.main_network.save_weights(self.log_path + "/weights/episode_{}".format(epoch))
+                # self.play(self.log_path + "/weights/", episode=ep_len)
 
     # @tf.function
     # def learn(self):
