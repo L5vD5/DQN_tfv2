@@ -5,6 +5,7 @@ from DQN import DQNNetwork
 import tensorflow as tf
 import numpy as np
 from config import Config
+from collections import deque
 
 class Agent(object):
     def __init__(self, ):
@@ -92,15 +93,15 @@ class Agent(object):
 
     def train(self):
         start_time = time.time()
-
+        latests_100_score = deque(maxlen=100)
         o, r, d, ep_ret, ep_len, n_env_step = self.env.reset(), 0, False, 0, 0, 0
         for epoch in range(self.config.epochs):
             o, d, ep_ret, ep_len = self.env.reset(), False, 0, 0
             o = np.array(o)
 
             while not (d):
-
-                if tf.random.uniform((), minval=0, maxval=1) < self.get_eps(tf.constant(n_env_step, tf.float32)):
+                eps = self.get_eps(tf.constant(n_env_step, tf.float32))
+                if tf.random.uniform((), minval=0, maxval=1) < eps:
                     a = self.env.action_space.sample()
                 else:
                     Q = self.getQ(tf.cast(tf.constant(value=tf.expand_dims(o, axis=0)), dtype=tf.float32))
@@ -141,6 +142,8 @@ class Agent(object):
                     ep_ret += r  # compute return
                     ep_len += 1
                 print("[Evaluate] ep_ret:[%.4f] ep_len:[%d]" % (ep_ret, ep_len))
+                latests_100_score.append((ep_ret))
+                self.write_summary(epoch, latests_100_score, ep_ret, n_env_step, eps)
                 print("Saving weights...")
                 self.main_network.save_weights(self.log_path + "/weights/episode_{}".format(epoch))
                 # self.play(self.log_path + "/weights/", episode=ep_len)
