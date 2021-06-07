@@ -87,11 +87,18 @@ class Agent(object):
         return loss
 
     @tf.function
-    def update_target_network(self, weight_target, weight_main):
-        print('update target network')
+    def soft_update_target_network(self, weight_target, weight_main):
+        tf.print('soft update target network')
         for wt, wm in zip(weight_target, weight_main):
             wt.assign(wm*0.001 + wt*0.999)
-        print('update target network end')
+        tf.print('soft update target network end')
+
+    @tf.function
+    def update_target_network(self, weight_target, weight_main):
+        tf.print('update target network')
+        for wt, wm in zip(weight_target, weight_main):
+            wt.assign(wm)
+        tf.print('update target network end')
 
 
     def train(self, load_dir=None, step=None):
@@ -131,8 +138,8 @@ class Agent(object):
                     # Update main network
                     self.update_main_network(tf.constant(value=o_batch, dtype='float32'), tf.constant(value=a_batch, dtype='int32'), tf.constant(value=r_batch, dtype='float32'), tf.constant(value=o1_batch, dtype='float32'), tf.constant(value=d_batch, dtype='float32'))
                     # Update target network
-                    weight_target, weight_main = self.target_network.trainable_variables, self.main_network.trainable_variables
-                    self.update_target_network(weight_target, weight_main)
+                    # weight_target, weight_main = self.target_network.trainable_variables, self.main_network.trainable_variables
+                    # self.soft_update_target_network(weight_target, weight_main)
 
             # Evaluate
             if (epoch == 0) or (((epoch + 1) % self.config.evaluate_every) == 0):
@@ -158,6 +165,8 @@ class Agent(object):
                 self.write_summary(epoch, latests_100_score, ep_ret, n_env_step, eps)
                 print("Saving weights...")
                 self.main_network.save_weights(self.log_path + "/weights/episode_{}".format(epoch))
+                weight_target, weight_main = self.target_network.trainable_variables, self.main_network.trainable_variables
+                self.update_target_network(weight_target, weight_main)
                 # self.play(self.log_path + "/weights/", episode=ep_len)
 
     def write_summary(self, episode, latest_100_score, episode_score, total_step, eps):
