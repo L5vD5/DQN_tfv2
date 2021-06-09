@@ -91,10 +91,16 @@ class Agent(object):
         self.target_network.set_weights(self.main_network.get_weights())
 
 
-    def train(self):
+    def train(self, load_dir=None, step=None):
         start_time = time.time()
+        if load_dir:
+            loaded_ckpt = tf.train.latest_checkpoint(load_dir)
+            self.main_network.load_weights(loaded_ckpt)
+
         latests_100_score = deque(maxlen=100)
         o, r, d, ep_ret, ep_len, n_env_step = self.env.reset(), 0, False, 0, 0, 0
+        if step:
+            n_env_step = step
         for epoch in range(self.config.epochs):
             o, d, ep_ret, ep_len = self.env.reset(), False, 0, 0
             o = np.array(o)
@@ -227,4 +233,5 @@ def get_envs():
     return env,eval_env
 
 a = Agent()
-a.play('./log/20210603_101243_BreakoutNoFrameskip-v4/weights/')
+a.train('')
+# a.play('./log/20210603_101243_BreakoutNoFrameskip-v4/weights/')
