@@ -17,7 +17,7 @@ class Config:
         self.train_pi_iters = 100
         self.train_v_iters = 100
         self.target_kl = 0.01
-        self.epochs = 10000
+        self.epochs = 1000000
         self.max_ep_len = 10000
         self.print_every = 10
         self.evaluate_every = 10

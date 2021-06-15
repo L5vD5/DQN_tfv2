@@ -1,6 +1,6 @@
 import datetime,gym,os,pybullet_envs,time,psutil,ray,imageio
 from atari_wrappers import make_atari, wrap_deepmind
-from ReplayBuffer import ReplayBuffer
+from Replaybuffer import ReplayBuffer
 from DQN import DQNNetwork
 import tensorflow as tf
 import numpy as np
@@ -34,6 +34,7 @@ class Agent(object):
         self.replay_start_size = 10000
         self.log_path = "./log/" + datetime.datetime.now().strftime("%Y%m%d_%H%M%S") + "_BreakoutNoFrameskip-v4"
         self.summary_writer = tf.summary.create_file_writer(self.log_path + "/summary/")
+        self.load_path = "./log/"
 
         # Buffer (Memory)
         self.buffer = ReplayBuffer(buffer_size=self.config.buffer_size, odim=self.odim, adim=self.adim, batch_size=self.config.mini_batch_size)
@@ -85,20 +86,32 @@ class Agent(object):
 
         return loss
 
-    # @tf.function
-    def update_target_network(self):
-        print('update target network', self.target_network)
-        self.target_network.set_weights(self.main_network.get_weights())
+    @tf.function
+    def soft_update_target_network(self, weight_target, weight_main):
+        tf.print('soft update target network')
+        for wt, wm in zip(weight_target, weight_main):
+            wt.assign(wm*0.001 + wt*0.999)
+        tf.print('soft update target network end')
+
+    @tf.function
+    def update_target_network(self, weight_target, weight_main):
+        # tf.print('update target network')
+        for wt, wm in zip(weight_target, weight_main):
+            wt.assign(wm)
+        # tf.print('update target network end')
 
 
     def train(self, load_dir=None, step=None):
         start_time = time.time()
-        if load_dir:
-            loaded_ckpt = tf.train.latest_checkpoint(load_dir)
-            self.main_network.load_weights(loaded_ckpt)
 
         latests_100_score = deque(maxlen=100)
         o, r, d, ep_ret, ep_len, n_env_step = self.env.reset(), 0, False, 0, 0, 0
+
+        if load_dir:
+            loaded_ckpt = tf.train.latest_checkpoint(load_dir)
+            self.main_network.load_weights(loaded_ckpt)
+            self.target_network.load_weights(loaded_ckpt)
+
         if step:
             n_env_step = step
         for epoch in range(self.config.epochs):
@@ -124,7 +137,11 @@ class Agent(object):
 
                 if len(self.buffer.buffer) > 5000:
                     o_batch, a_batch, r_batch, o1_batch, d_batch = self.buffer.sample()
+                    # Update main network
                     self.update_main_network(tf.constant(value=o_batch, dtype='float32'), tf.constant(value=a_batch, dtype='int32'), tf.constant(value=r_batch, dtype='float32'), tf.constant(value=o1_batch, dtype='float32'), tf.constant(value=d_batch, dtype='float32'))
+                    # Update target network
+                    # weight_target, weight_main = self.target_network.trainable_variables, self.main_network.trainable_variables
+                    # self.soft_update_target_network(weight_target, weight_main)
 
             # Evaluate
             if (epoch == 0) or (((epoch + 1) % self.config.evaluate_every) == 0):
@@ -135,8 +152,6 @@ class Agent(object):
                        time.strftime("%H:%M:%S", time.gmtime(time.time() - start_time)),
                        ram_percent)
                       )
-                # Update target network
-                self.update_target_network()
                 o, d, ep_ret, ep_len = self.eval_env.reset(), False, 0, 0
                 _ = self.eval_env.render(mode='human')
                 while not (d or (ep_len == self.config.steps_per_epoch)):
@@ -152,6 +167,8 @@ class Agent(object):
                 self.write_summary(epoch, latests_100_score, ep_ret, n_env_step, eps)
                 print("Saving weights...")
                 self.main_network.save_weights(self.log_path + "/weights/episode_{}".format(epoch))
+                weight_target, weight_main = self.target_network.trainable_variables, self.main_network.trainable_variables
+                self.update_target_network(weight_target, weight_main)
                 # self.play(self.log_path + "/weights/", episode=ep_len)
 
     def write_summary(self, episode, latest_100_score, episode_score, total_step, eps):
@@ -233,5 +250,5 @@ def get_envs():
     return env,eval_env
 
 a = Agent()
-a.train('')
-# a.play('./log/20210603_101243_BreakoutNoFrameskip-v4/weights/')
+# a.play('./log/20210605_012500_BreakoutNoFrameskip-v4/weights')
+a.train('./log/20210605_012500_BreakoutNoFrameskip-v4/weights', 1000000)
