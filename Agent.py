@@ -1,4 +1,4 @@
-import datetime,gym,os,pybullet_envs,time,psutil,ray,imageio
+import datetime,gym,os,time,psutil,imageio
 from atari_wrappers import make_atari, wrap_deepmind
 from Replaybuffer import ReplayBuffer
 from DQN import DQNNetwork
@@ -248,7 +248,3 @@ def get_envs():
         o,r,d,_ = eval_env.step(a)
         time.sleep(0.01)
     return env,eval_env
-
-a = Agent()
-# a.play('./log/20210605_012500_BreakoutNoFrameskip-v4/weights')
-a.train('./log/20210605_012500_BreakoutNoFrameskip-v4/weights', 1000000)
