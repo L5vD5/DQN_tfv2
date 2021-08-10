@@ -4,13 +4,17 @@ from Replaybuffer import ReplayBuffer
 from DQN import DQNNetwork
 import tensorflow as tf
 import numpy as np
-from config import Config
 from collections import deque
 
 class Agent(object):
-    def __init__(self, ):
+    def __init__(self, args):
         # Config
-        self.config = Config()
+        self.gamma = args.gamma
+        self.buffer_size = args.buffer_size
+        self.mini_batch_size = args.mini_batch_size
+        self.epochs = args.epochs
+        self.evaluate_every = args.evaluate_every
+        self.steps_per_epoch = args.steps_per_epoch
 
         # Environment
         self.env, self.eval_env = get_envs()
@@ -23,7 +27,7 @@ class Agent(object):
         self.main_network.build(input_shape=(None, 84, 84, 4))
         self.target_network.build(input_shape=(None, 84, 84, 4))
         self.main_network.summary()
-        self.gamma = self.config.gamma
+        self.gamma = self.gamma
         self.optimizer = tf.keras.optimizers.Adam(learning_rate=1e-4, epsilon=1e-6)
         self.loss = tf.keras.losses.Huber()
         self.loss_metric = tf.keras.metrics.Mean(name="loss")
@@ -37,7 +41,7 @@ class Agent(object):
         self.load_path = "./log/"
 
         # Buffer (Memory)
-        self.buffer = ReplayBuffer(buffer_size=self.config.buffer_size, odim=self.odim, adim=self.adim, batch_size=self.config.mini_batch_size)
+        self.buffer = ReplayBuffer(buffer_size=self.buffer_size, odim=self.odim, adim=self.adim, batch_size=self.mini_batch_size)
 
     @tf.function
     def get_eps(self, current_step, terminal_eps=0.01, terminal_frame_factor=25):
@@ -114,7 +118,7 @@ class Agent(object):
 
         if step:
             n_env_step = step
-        for epoch in range(self.config.epochs):
+        for epoch in range(self.epochs):
             o, d, ep_ret, ep_len = self.env.reset(), False, 0, 0
             o = np.array(o)
 
@@ -144,17 +148,17 @@ class Agent(object):
                     # self.soft_update_target_network(weight_target, weight_main)
 
             # Evaluate
-            if (epoch == 0) or (((epoch + 1) % self.config.evaluate_every) == 0):
+            if (epoch == 0) or (((epoch + 1) % self.evaluate_every) == 0):
                 ram_percent = psutil.virtual_memory().percent  # memory usage
                 print("[Eval. start] step:[%d/%d][%.1f%%] #step:[%.1e] time:[%s] ram:[%.1f%%]." %
-                      (epoch + 1, self.config.epochs, epoch / self.config.epochs * 100,
+                      (epoch + 1, self.epochs, epoch / self.epochs * 100,
                        n_env_step,
                        time.strftime("%H:%M:%S", time.gmtime(time.time() - start_time)),
                        ram_percent)
                       )
                 o, d, ep_ret, ep_len = self.eval_env.reset(), False, 0, 0
                 _ = self.eval_env.render(mode='human')
-                while not (d or (ep_len == self.config.steps_per_epoch)):
+                while not (d or (ep_len == self.steps_per_epoch)):
                     # a = sess.run(model['mu'], feed_dict={model['o_ph']: o.reshape(1, -1)})
                     Q = self.getQ(tf.cast(tf.constant(value=tf.expand_dims(o, axis=0)), dtype=tf.float32))
                     a = tf.cast(tf.argmax(tf.squeeze(Q)), tf.int32).numpy()
